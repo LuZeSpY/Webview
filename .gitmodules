@@ -1,0 +1,3 @@
+[submodule "src/zeventhelper"]
+	path = src/zeventhelper
+	url = https://github.com/Headlock85/ZEventHelper
