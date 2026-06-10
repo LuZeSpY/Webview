@@ -1,43 +1,91 @@
-import asyncio
+import sys, os, asyncio, urllib.parse
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse, urljoin, quote 
 
-from fastapi import FastAPI, HTTPException
+import httpx
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
-from api import API  # adapte selon le nom exact de ta classe dans api.py
+from api import API
 
 app = FastAPI()
 api = API()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 executor = ThreadPoolExecutor(max_workers=4)
+
+# Headers qui imitent un vrai navigateur — évite le 403 du CDN
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+    "Accept": "*/*",
+    "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+    "Origin": "https://vidfast.pro",
+    "Referer": "https://vidfast.pro/",
+}
+
+PROXY_BASE = "http://localhost:8000"  # ← URLs absolues pour hls.js
 
 
 # ── Recherche ──────────────────────────────────────────────────────────────────
 
 @app.get("/search")
 async def search(q: str):
-    titles = await asyncio.get_event_loop().run_in_executor(
-        executor, api.get_titles, q
-    )
+    titles = await asyncio.get_event_loop().run_in_executor(executor, api.get_titles, q)
     if titles is None:
         raise HTTPException(500, "Erreur API IMDB")
     return titles
+
+
+# ── Infos détaillées ───────────────────────────────────────────────────────────
+
+@app.get("/info/{title_id}")
+async def get_info(title_id: str):
+    return await asyncio.get_event_loop().run_in_executor(executor, api.get_title_info, title_id)
 
 
 # ── Saisons ────────────────────────────────────────────────────────────────────
 
 @app.get("/seasons/{title_id}")
 async def get_seasons(title_id: str):
-    return await asyncio.get_event_loop().run_in_executor(
-        executor, api.get_seasons, title_id
-    )
+    return await asyncio.get_event_loop().run_in_executor(executor, api.get_seasons, title_id)
+
+
+# ── Proxy HLS ──────────────────────────────────────────────────────────────────
+
+@app.get("/proxy")
+async def proxy(url: str, request: Request):
+    decoded = urllib.parse.unquote(url)
+
+    headers = {**BROWSER_HEADERS}
+    if "range" in request.headers:
+        headers["range"] = request.headers["range"]
+
+    async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+        resp = await client.get(decoded, headers=headers)
+        ct   = resp.headers.get("content-type", "application/octet-stream")
+
+        if "mpegurl" in ct or decoded.endswith(".m3u8"):
+            lines = []
+            for line in resp.text.splitlines():
+                s = line.strip()
+                if s and not s.startswith("#"):
+                    seg = s if s.startswith("http") else urljoin(decoded, s)
+                    enc = urllib.parse.quote(seg, safe="")
+                    line = f"{PROXY_BASE}/proxy?url={enc}"
+                lines.append(line)
+            return Response(
+                "\n".join(lines),
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"},
+            )
+
+        return Response(
+            resp.content,
+            status_code=resp.status_code,
+            media_type=ct,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
 
 
 # ── Stream film ────────────────────────────────────────────────────────────────
@@ -45,10 +93,11 @@ async def get_seasons(title_id: str):
 @app.get("/stream/movie/{imdb_id}")
 async def stream_movie(imdb_id: str):
     try:
-        url = await asyncio.get_event_loop().run_in_executor(
+        raw = await asyncio.get_event_loop().run_in_executor(
             executor, api.get_movie_m3u8, imdb_id
         )
-        return {"url": url}
+        enc = urllib.parse.quote(raw, safe="")
+        return {"url": f"{PROXY_BASE}/proxy?url={enc}"}
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -58,9 +107,10 @@ async def stream_movie(imdb_id: str):
 @app.get("/stream/series/{imdb_id}/{season}/{episode}")
 async def stream_series(imdb_id: str, season: int, episode: int):
     try:
-        url = await asyncio.get_event_loop().run_in_executor(
+        raw = await asyncio.get_event_loop().run_in_executor(
             executor, api.get_series_m3u8, imdb_id, season, episode
         )
-        return {"url": url}
+        enc = urllib.parse.quote(raw, safe="")
+        return {"url": f"{PROXY_BASE}/proxy?url={enc}"}
     except Exception as e:
         raise HTTPException(500, str(e))
