@@ -77,6 +77,143 @@ function useSearch(query: string, delay = 450) {
 
 // ─── VideoPlayer ───────────────────────────────────────────────────────────────
 
+// function VideoPlayer({ item, streamUrl, streamLoading }: {
+//   item: MediaItem | null;
+//   streamUrl: string | null;
+//   streamLoading: boolean;
+// }) {
+//   const videoRef    = useRef<HTMLVideoElement>(null);
+//   const hlsRef      = useRef<Hls | null>(null);
+//   const progressRef = useRef<HTMLDivElement>(null);
+//   const [playing, setPlaying] = useState(false);
+//   const [muted, setMuted]     = useState(false);
+//   const [progress, setProgress] = useState(0);
+
+//   useEffect(() => {
+//     const video = videoRef.current;
+//     if (!video) return;
+//     hlsRef.current?.destroy();
+//     hlsRef.current = null;
+//     if (!streamUrl) return;
+
+//     if (Hls.isSupported()) {
+//       const hls = new Hls({ enableWorker: true });
+//       hlsRef.current = hls;
+//       hls.loadSource(streamUrl);
+//       hls.attachMedia(video);
+//       hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); setPlaying(true); });
+//       hls.on(Hls.Events.ERROR, (_, data) => console.error("HLS error:", data));
+//     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+//       video.src = streamUrl;
+//       video.play().catch(() => {});
+//       setPlaying(true);
+//     }
+
+//     const onTimeUpdate = () => {
+//       if (video.duration) setProgress((video.currentTime / video.duration) * 100);
+//     };
+//     video.addEventListener("timeupdate", onTimeUpdate);
+//     return () => { hlsRef.current?.destroy(); video.removeEventListener("timeupdate", onTimeUpdate); };
+//   }, [streamUrl]);
+
+//   const togglePlay = () => {
+//     const v = videoRef.current;
+//     if (!v || !streamUrl) return;
+//     v.paused ? v.play() : v.pause();
+//   };
+
+//   const toggleMute = () => {
+//     if (!videoRef.current) return;
+//     videoRef.current.muted = !muted;
+//     setMuted(m => !m);
+//   };
+
+//   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+//     if (!progressRef.current || !videoRef.current?.duration) return;
+//     const rect = progressRef.current.getBoundingClientRect();
+//     const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+//     videoRef.current.currentTime = pct * videoRef.current.duration;
+//   };
+
+//   return (
+//     <div className="relative w-full bg-black overflow-hidden" style={{ aspectRatio: "16/9" }}>
+
+//       {item && !streamUrl && (
+//         <img src={item.thumb} alt={item.title} className="w-full h-full object-cover"
+//           style={{ opacity: 0.5, filter: "blur(4px)" }} />
+//       )}
+
+//       <video ref={videoRef}
+//         className="absolute inset-0 w-full h-full object-cover"
+//         style={{ display: streamUrl ? "block" : "none" }}
+//         onPlay={() => setPlaying(true)}
+//         onPause={() => setPlaying(false)}
+//       />
+
+//       <div className="absolute inset-0 pointer-events-none"
+//         style={{ background: "linear-gradient(to top, #09090e 0%, transparent 50%, rgba(9,9,14,0.4) 100%)" }} />
+
+//       {streamLoading && (
+//         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+//           <Loader2 size={32} className="animate-spin" style={{ color: "var(--primary)" }} />
+//           <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--primary)", letterSpacing: "0.1em" }}>
+//             EXTRACTION DU FLUX…
+//           </span>
+//         </div>
+//       )}
+
+//       {streamUrl && !streamLoading && !playing && (
+//         <div className="absolute inset-0 flex items-center justify-center">
+//           <button onClick={togglePlay}
+//             className="w-16 h-16 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
+//             style={{ background: "rgba(226,201,126,0.15)", border: "1.5px solid rgba(226,201,126,0.5)", backdropFilter: "blur(8px)" }}>
+//             <Play size={26} className="ml-1" fill="var(--primary)" style={{ color: "var(--primary)" }} />
+//           </button>
+//         </div>
+//       )}
+
+//       {!item && !streamLoading && (
+//         <div className="absolute inset-0 flex items-center justify-center">
+//           <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em" }}>
+//             SÉLECTIONNER UN TITRE
+//           </span>
+//         </div>
+//       )}
+
+//       {/* Contrôles */}
+//       <div className="absolute bottom-0 left-0 right-0 px-5 pb-4 pt-10"
+//         style={{ background: "linear-gradient(to top, rgba(9,9,14,0.95) 0%, transparent 100%)" }}>
+//         <div ref={progressRef} onClick={handleProgressClick}
+//           className="w-full h-1 rounded-full cursor-pointer mb-3 group"
+//           style={{ background: "rgba(255,255,255,0.12)" }}>
+//           <div className="h-full rounded-full"
+//             style={{ width: `${progress}%`, background: "var(--primary)", transition: "width 0.1s linear" }} />
+//         </div>
+//         <div className="flex items-center justify-between">
+//           <div className="flex items-center gap-3">
+//             <button onClick={togglePlay} disabled={!streamUrl}
+//               className="text-foreground/80 hover:text-foreground transition-colors disabled:opacity-30">
+//               {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+//             </button>
+//             <button onClick={toggleMute} className="text-foreground/80 hover:text-foreground transition-colors">
+//               {muted ? <Volume2 size={18} /> : <Volume2 size={18} />}
+//             </button>
+//             {item && (
+//               <span className="text-muted-foreground" style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>
+//                 {item.title} · {item.duration}
+//               </span>
+//             )}
+//           </div>
+//           <span className="px-2 py-0.5 rounded border border-border text-muted-foreground"
+//             style={{ fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
+//             HLS
+//           </span>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
 function VideoPlayer({ item, streamUrl, streamLoading }: {
   item: MediaItem | null;
   streamUrl: string | null;
@@ -85,28 +222,61 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
   const videoRef    = useRef<HTMLVideoElement>(null);
   const hlsRef      = useRef<Hls | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [muted, setMuted]     = useState(false);
+  const [playing, setPlaying]   = useState(false);
+  const [muted, setMuted]       = useState(false);
   const [progress, setProgress] = useState(0);
+  const [hlsError, setHlsError] = useState<string | null>(null);
+  const [hlsState, setHlsState] = useState<string>("idle");
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
     hlsRef.current?.destroy();
     hlsRef.current = null;
+    setHlsError(null);
+    setHlsState("idle");
+
     if (!streamUrl) return;
 
+    console.log("[HLS] Chargement de :", streamUrl);
+    setHlsState("loading");
+
     if (Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true });
+      const hls = new Hls({ enableWorker: false }); // désactive worker pour debug
       hlsRef.current = hls;
+
+      hls.on(Hls.Events.MANIFEST_LOADING,  () => { console.log("[HLS] manifest loading"); setHlsState("manifest loading"); });
+      hls.on(Hls.Events.MANIFEST_LOADED,   () => { console.log("[HLS] manifest loaded");  setHlsState("manifest loaded"); });
+      hls.on(Hls.Events.MANIFEST_PARSED,   () => {
+        console.log("[HLS] manifest parsed → play()");
+        setHlsState("ready");
+        video.play().catch(e => {
+          console.warn("[HLS] play() bloqué :", e.message);
+          setHlsState("paused — cliquer pour lancer");
+        });
+        setPlaying(true);
+      });
+
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        console.error("[HLS] Erreur :", data.type, data.details, data);
+        if (data.fatal) {
+          setHlsError(`${data.type} — ${data.details}`);
+          setHlsState("erreur");
+        }
+      });
+
+      console.log("STREAM URL =", streamUrl);
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); setPlaying(true); });
-      hls.on(Hls.Events.ERROR, (_, data) => console.error("HLS error:", data));
+
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      console.log("[HLS] Safari natif");
       video.src = streamUrl;
-      video.play().catch(() => {});
+      video.play().catch(e => console.warn("Safari play bloqué:", e));
       setPlaying(true);
+    } else {
+      setHlsError("hls.js non supporté sur ce navigateur");
     }
 
     const onTimeUpdate = () => {
@@ -153,6 +323,7 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
       <div className="absolute inset-0 pointer-events-none"
         style={{ background: "linear-gradient(to top, #09090e 0%, transparent 50%, rgba(9,9,14,0.4) 100%)" }} />
 
+      {/* Spinner extraction */}
       {streamLoading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
           <Loader2 size={32} className="animate-spin" style={{ color: "var(--primary)" }} />
@@ -162,6 +333,16 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
         </div>
       )}
 
+      {/* État HLS visible à l'écran pour debug */}
+      {streamUrl && !streamLoading && (
+        <div className="absolute top-3 left-3 px-2 py-1 rounded"
+          style={{ background: "rgba(0,0,0,0.6)", fontFamily: "'DM Mono', monospace", fontSize: 10,
+            color: hlsError ? "#e05c5c" : "var(--primary)", backdropFilter: "blur(4px)" }}>
+          {hlsError ?? hlsState}
+        </div>
+      )}
+
+      {/* Bouton play central */}
       {streamUrl && !streamLoading && !playing && (
         <div className="absolute inset-0 flex items-center justify-center">
           <button onClick={togglePlay}
@@ -196,7 +377,7 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
               {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
             </button>
             <button onClick={toggleMute} className="text-foreground/80 hover:text-foreground transition-colors">
-              {muted ? <Volume2 size={18} /> : <Volume2 size={18} />}
+              {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
             </button>
             {item && (
               <span className="text-muted-foreground" style={{ fontFamily: "'DM Mono', monospace", fontSize: 11 }}>
@@ -415,7 +596,7 @@ function InfoTooltip({ item, anchorRect }: { item: MediaItem; anchorRect: DOMRec
             {item.title}
           </h2>
 
-          {item.description && <p style={clampStyle}>{item.description}</p>}
+          {item.description && <p>{item.description}</p>}
 
           <div style={{ display: "flex", alignItems: "center", gap: 10,
             borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 10 }}>
