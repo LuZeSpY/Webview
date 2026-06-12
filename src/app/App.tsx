@@ -167,7 +167,7 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
   };
 
   return (
-    <div className="relative w-full bg-black overflow-hidden" style={{ aspectRatio: "16/9" }}>
+    <div className="relative w-full h-full bg-black overflow-hidden">
 
       {item && !streamUrl && (
         <img src={item.thumb} alt={item.title} className="w-full h-full object-cover"
@@ -175,7 +175,7 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
       )}
 
       <video ref={videoRef}
-        className="absolute inset-0 w-full h-full object-cover"
+        className="absolute inset-0 w-full h-full object-contain"
         style={{ display: streamUrl ? "block" : "none" }}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
@@ -650,7 +650,7 @@ export default function App() {
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
           {/* Player */}
-          <div style={{ maxHeight: "45vh" }} className="flex-shrink-0">
+          <div className="flex-1 min-h-0">
             <VideoPlayer item={activeItem} streamUrl={streamUrl} streamLoading={streamLoading} />
           </div>
 
