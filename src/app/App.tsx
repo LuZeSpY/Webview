@@ -8,7 +8,9 @@ import Hls from "hls.js";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = window.location.hostname === "localhost"
+  ? "http://localhost:8000"
+  : `http://${window.location.hostname}:8000`;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -89,6 +91,25 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
   const [hlsError, setHlsError] = useState<string | null>(null);
   const [hlsState, setHlsState] = useState<string>("idle");
 
+  const [casting, setCasting] = useState(false);
+  const [castOk, setCastOk]   = useState(false);
+
+  const castToKodi = async () => {
+    if (!streamUrl) return;
+    setCasting(true); setCastOk(false);
+    try {
+      const res = await fetch(`${API_BASE}/cast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stream_url: streamUrl }),
+      });
+      const data = await res.json();
+      setCastOk(data?.result === "OK");
+    } finally {
+      setCasting(false);
+    }
+  };
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -104,7 +125,13 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
     setHlsState("loading");
 
     if (Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: false }); // désactive worker pour debug
+      const hls = new Hls({
+        enableWorker: true,
+        maxBufferLength: 30,             // Conserve 30 secondes de vidéo en cache max
+        maxMaxBufferLength: 60,          // Limite absolue du buffer à 60 secondes
+        maxBufferSize: 60 * 1024 * 1024, // Associe jusqu'à 60 Mo de RAM au buffer (60 * 1024 * 1024 octets)
+        maxStarvationDelay: 4,           // Temps max (en s) d'attente avant que HLS ne tente de forcer le saut d'un buffer vide
+      });
       hlsRef.current = hls;
 
       hls.on(Hls.Events.MANIFEST_LOADING,  () => { console.log("[HLS] manifest loading"); setHlsState("manifest loading"); });
@@ -189,7 +216,7 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
           <Loader2 size={32} className="animate-spin" style={{ color: "var(--primary)" }} />
           <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--primary)", letterSpacing: "0.1em" }}>
-            EXTRACTION DU FLUX…
+            En cours de récupération ... patience
           </span>
         </div>
       )}
@@ -246,10 +273,29 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
               </span>
             )}
           </div>
-          <span className="px-2 py-0.5 rounded border border-border text-muted-foreground"
-            style={{ fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
-            HLS
-          </span>
+          <div>
+        {streamUrl && (
+        <button
+          onClick={castToKodi}
+          disabled={casting}
+          className="flex items-center gap-2 px-4 py-2 rounded transition-all active:scale-95 disabled:opacity-50"
+          style={{
+            background: castOk ? "rgba(74,222,128,0.15)" : "rgba(226,201,126,0.12)",
+            border: `1px solid ${castOk ? "rgba(74,222,128,0.4)" : "rgba(226,201,126,0.3)"}`,
+            color: castOk ? "#4ade80" : "var(--primary)",
+            fontFamily: "'DM Mono', monospace",
+            fontSize: 11,
+            letterSpacing: "0.08em",
+          }}>
+          {casting
+            ? <Loader2 size={13} className="animate-spin" />
+            : castOk
+              ? <span>✓ EN LECTURE SUR KODI</span>
+              : <span>▶ ENVOYER SUR KODI</span>
+          }
+        </button>
+        )}
+        </div>
         </div>
       </div>
     </div>
