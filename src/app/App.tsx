@@ -121,7 +121,7 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
   };
 
   return (
-    <div className="relative w-full bg-black overflow-hidden" style={{ aspectRatio: "16/9" }}>
+    <div className="relative w-full h-full bg-black overflow-hidden">
       {item && !streamUrl && (
         <img src={item.thumb} alt={item.title} className="w-full h-full object-cover"
           style={{ opacity: 0.5, filter: "blur(4px)" }} />
@@ -131,8 +131,8 @@ function VideoPlayer({ item, streamUrl, streamLoading }: {
         style={{ display: streamUrl ? "block" : "none" }}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
 
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ background: "linear-gradient(to top, #09090e 0%, transparent 50%, rgba(9,9,14,0.4) 100%)" }} />
+      <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-8 z-10"
+        style={{ background: "linear-gradient(to top, rgba(9,9,14,0.98) 0%, transparent 100%)" }} />
 
       {streamLoading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
@@ -557,18 +557,18 @@ export default function App() {
       </header>
 
       {/* ── Body ── */}
-      <div className="flex flex-col lg:flex-row flex-1 lg:min-h-0 lg:overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 lg:min-h-0 overflow-hidden">
 
         {/* ── Colonne gauche : player + info ── */}
         <div className="flex flex-col flex-1 lg:min-w-0 lg:overflow-hidden">
 
           {/* Player */}
-          <div className="flex-shrink-0 lg:max-h-[45vh]">
+          <div className="flex-shrink-0" style={{ height: "clamp(200px, 42vh, 480px)", overflow: "hidden" }}>
             <VideoPlayer item={activeItem} streamUrl={streamUrl} streamLoading={streamLoading} />
           </div>
 
           {/* Info strip */}
-          <div className="px-4 py-4 md:px-6 md:py-5 lg:flex-1 lg:overflow-hidden" style={{ background: "var(--card)" }}>
+          <div className="px-4 py-4 md:px-6 md:py-5 lg:flex-1 lg:overflow-auto" style={{ minHeight: "120px", background: "var(--card)" }}>
             {activeItem ? (
               <div className="flex items-start gap-4 md:gap-6">
                 <div className="flex-1 min-w-0 flex flex-col gap-2 md:gap-3">
