@@ -79,7 +79,7 @@ class API:
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) "
             "Gecko/20100101 Firefox/125.0"
         )
-        self.timeout: float = 2.5  # Temps à passer au maximum sur la recherche des liens
+        self.timeout: float = 10  # Temps à passer au maximum sur la recherche des liens
 
     @staticmethod
     def extract_m3u8(text: str) -> list[str]:
