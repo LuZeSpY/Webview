@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, urljoin, quote 
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -26,6 +26,23 @@ BROWSER_HEADERS = {
 
 PROXY_BASE = "http://localhost:8000"  # ← URLs absolues pour hls.js
 
+# ── CAST KODI ──────────────────────────────────────────────────────────────────
+
+KODI_URL  = "http://192.168.1.185:8080/jsonrpc"  # IP du Pi
+KODI_AUTH = ("kodi", "kodi")                     # identifiants KODI
+
+@app.post("/cast")
+async def cast_to_kodi(stream_url: str = Body(..., embed=True)):
+    """Envoie un flux HLS directement dans KODI sur le Pi."""
+    payload = {
+        "jsonrpc": "2.0",
+        "method":  "Player.Open",
+        "params":  {"item": {"file": stream_url}},
+        "id":      1
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(KODI_URL, json=payload, auth=KODI_AUTH, timeout=5)
+    return resp.json()
 
 # ── Recherche ──────────────────────────────────────────────────────────────────
 
