@@ -15,6 +15,10 @@ api = API()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 executor = ThreadPoolExecutor(max_workers=4)
 
+SEARCH_CACHE = {}
+INFO_CACHE = {}      
+SEASONS_CACHE = {} 
+
 # Headers qui imitent un vrai navigateur — évite le 403 du CDN
 BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
@@ -48,9 +52,19 @@ async def cast_to_kodi(stream_url: str = Body(..., embed=True)):
 
 @app.get("/search")
 async def search(q: str):
+    q_lower = q.strip().lower()
+    
+    # Si la recherche a déjà été faite, on renvoie le résultat stocké sans appeler l'API
+    if q_lower in SEARCH_CACHE:
+        print(f"[CACHE] Résultat trouvé pour: {q}")
+        return SEARCH_CACHE[q_lower]
+        
     titles = await asyncio.get_event_loop().run_in_executor(executor, api.get_titles, q)
     if titles is None:
-        raise HTTPException(500, "Erreur API IMDB")
+        raise HTTPException(500, "Erreur API IMDB (Rate Limit ou indisponible)")
+        
+    # On sauvegarde dans le cache
+    SEARCH_CACHE[q_lower] = titles
     return titles
 
 
@@ -58,14 +72,42 @@ async def search(q: str):
 
 @app.get("/info/{title_id}")
 async def get_info(title_id: str):
-    return await asyncio.get_event_loop().run_in_executor(executor, api.get_title_info, title_id)
+    title_id_clean = title_id.strip()
+    
+    # 1. Vérification dans le cache
+    if title_id_clean in INFO_CACHE:
+        print(f"[CACHE] Infos trouvées pour l'ID: {title_id}")
+        return INFO_CACHE[title_id_clean]
+        
+    # 2. Si non trouvé, appel à l'API IMDb
+    info = await asyncio.get_event_loop().run_in_executor(executor, api.get_title_info, title_id)
+    if info is None:
+        raise HTTPException(500, "Erreur API IMDB (Rate Limit ou indisponible)")
+        
+    # 3. Sauvegarde dans le cache et retour
+    INFO_CACHE[title_id_clean] = info
+    return info
 
 
 # ── Saisons ────────────────────────────────────────────────────────────────────
 
 @app.get("/seasons/{title_id}")
 async def get_seasons(title_id: str):
-    return await asyncio.get_event_loop().run_in_executor(executor, api.get_seasons, title_id)
+    title_id_clean = title_id.strip()
+    
+    # 1. Vérification dans le cache
+    if title_id_clean in SEASONS_CACHE:
+        print(f"[CACHE] Saisons trouvées pour l'ID: {title_id}")
+        return SEASONS_CACHE[title_id_clean]
+        
+    # 2. Si non trouvé, appel à l'API IMDb
+    seasons = await asyncio.get_event_loop().run_in_executor(executor, api.get_seasons, title_id)
+    if seasons is None:
+        raise HTTPException(500, "Erreur API IMDB (Rate Limit ou indisponible)")
+        
+    # 3. Sauvegarde dans le cache et retour
+    SEASONS_CACHE[title_id_clean] = seasons
+    return seasons
 
 
 # ── Proxy HLS ──────────────────────────────────────────────────────────────────
