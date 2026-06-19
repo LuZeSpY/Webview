@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -404,12 +405,36 @@ class API:
 
 
 # -- Fonction autonome (hors de la classe API) ------------------------------
-def download_video_from_m3u8(m3u8_url: str, output_filename: str, user_agent: str, referer: str):
+def _find_ffmpeg() -> str:
+    """Localise le binaire FFmpeg : node_modules en priorité, sinon le système."""
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ffmpeg_path = os.path.join(base_dir, "node_modules", "ffmpeg-static", "ffmpeg.exe")
 
-    if not os.path.exists(ffmpeg_path):
-        raise RuntimeError(f"FFmpeg non trouvé au chemin spécifié : {ffmpeg_path}")
+    if sys.platform.startswith("win"):
+        candidate = os.path.join(base_dir, "node_modules", "ffmpeg-static", "ffmpeg.exe")
+    else:
+        candidate = os.path.join(base_dir, "node_modules", "ffmpeg-static", "ffmpeg")
+
+    if os.path.exists(candidate):
+        # Sur Linux, s'assurer que le binaire est exécutable
+        if not sys.platform.startswith("win"):
+            os.chmod(candidate, 0o755)
+        return candidate
+
+    # Fallback : FFmpeg installé dans le PATH système (ex: sudo apt install ffmpeg)
+    system_ffmpeg = shutil.which("ffmpeg")
+    if system_ffmpeg:
+        return system_ffmpeg
+
+    raise RuntimeError(
+        "FFmpeg introuvable.\n"
+        "  • Sur Linux  : sudo apt install ffmpeg\n"
+        "  • Sur macOS  : brew install ffmpeg\n"
+        "  • Sur Windows: npm install ffmpeg-static  (dans le dossier parent)"
+    )
+
+
+def download_video_from_m3u8(m3u8_url: str, output_filename: str, user_agent: str, referer: str):
+    ffmpeg_path = _find_ffmpeg()
 
     headers = f"User-Agent: {user_agent}\r\nReferer: {referer}\r\nOrigin: https://vidfast.pro\r\n"
 
@@ -422,11 +447,14 @@ def download_video_from_m3u8(m3u8_url: str, output_filename: str, user_agent: st
         output_filename
     ]
 
+    print(f"[FFmpeg] Binaire utilisé : {ffmpeg_path}")
     print(f"Téléchargement démarré vers {output_filename}...")
     process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    
+
     if process.returncode == 0:
         print("Téléchargement et assemblage réussis !")
     else:
         print("Erreur lors du téléchargement :")
-        print(process.stderr)
+        # Affiche uniquement les 30 dernières lignes de stderr (évite le spam du header FFmpeg)
+        stderr_lines = process.stderr.strip().splitlines()
+        print("\n".join(stderr_lines[-30:]))
